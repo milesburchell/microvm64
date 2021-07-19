@@ -1,0 +1,47 @@
+64-bit arch
+
+Registers (64-bit):
+ 0. A - GP
+ 1. B - GP
+ 2. C - GP
+ 3. D - GP
+ 4. E - GP
+ 5. F - GP
+ 6. G - GP
+ 7. H - GP
+ 8. R - Return Value
+ 9. S - Stack Pointer
+10. Z - Stack Base Pointer
+11. I - Instruction Pointer
+12. L - Flags
+
+
+Instructions:
+ 0. ADD A,B  - Adds register/num B to register A
+ 1. SUB A,B  - Subtracts register/num B from register A
+ 2. MUL A,B - Multiplies register A by register/num B, signed
+ 3. DIV A,B - Divides register A by register/num B, signed
+ 4. AND A,B  - Sets bits in register A according to A AND B
+ 5. OR A,B   - Sets bits in register A according to A OR B
+ 6. XOR A,B  - Sets bits in register A according to A XOR B
+ 7. JMP A    - Jumps to instruction at offset I+A (A signed)
+ 8. JZR A    - Jumps to instruction at offset I+A (A signed) if register R is zero
+ 9. MOV A,B  - Moves 64-bit value from B to A
+10. DREF A,B - Moves 64-bit value from address specified by B to A
+11. LADR A,B - Loads register A with address of register B
+12. COMP A,B - Loads register A with the bitwise complement of the value of register B
+13. PUSH A   - Pushes A onto the stack
+14. POP A    - Pops off of the stack into A
+15. RET      - Signifies end of execution
+
+
+Instruction Memory Layout:
+ BYTE Instruction | Flags
+ BYTE/64BIT Operand A (+ Operand B if both operands are registers - bits 0-3 register A, bits 4-7 register B)
+ BYTE/64BIT Operand B (Optional)
+
+Instruction/Flag Bits:
+ 0-4: Instruction
+ 5:   Operand A (0 - register, 1 - value)
+ 6:   Operand B (0 - register, 1 - value)
+ 7:   Small Value Operands (1 - non-register value/s are 8-bit not 64-bit - invalid for DREF/LADR)
