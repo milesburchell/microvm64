@@ -36,9 +36,9 @@ Instructions:
 
 
 Instruction Memory Layout:
- BYTE Instruction | Flags
- BYTE/64BIT Operand A (+ Operand B if both operands are registers - bits 0-3 register A, bits 4-7 register B)
- BYTE/64BIT Operand B (Optional)
+ 8BIT Instruction | Flags
+ 8BIT/64BIT Operand A
+ 8BIT/64BIT Operand B
 
 Instruction/Flag Bits:
  0-4: Instruction

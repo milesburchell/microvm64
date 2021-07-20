@@ -5,6 +5,7 @@
 #endif
 
 #define U64_MAX 0xFFFFFFFFFFFFFFFF
+#define U8_MAX  0xFF
 
 typedef unsigned long long U64;
 typedef signed long long   I64;

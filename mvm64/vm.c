@@ -180,6 +180,7 @@ __inline U64 exec_instruction(MVM64_REGISTERS* context)
 
 	case COMP:
 		OP_A->u = ~(OP_B->u);
+		break;
 
 	case PUSH:
 		// check for stack overflow
