@@ -33,4 +33,6 @@ int main()
     U64 code_executed = execute(testcode, context, &retnval);
 
     printf("Executed 0x%llx bytes, return value 0x%llx\n", code_executed, retnval.u);
+
+    free_context(context);
 }

@@ -84,4 +84,6 @@ typedef enum
 
 MVM64_REGISTERS* create_context();
 
+void free_context(MVM64_REGISTERS* context);
+
 U64 execute(const void* code, MVM64_REGISTERS* context, INT64* return_value);
