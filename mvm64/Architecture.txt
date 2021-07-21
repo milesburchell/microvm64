@@ -24,15 +24,20 @@ Instructions:
  4. AND A,B  - Sets bits in register A according to A AND B
  5. OR A,B   - Sets bits in register A according to A OR B
  6. XOR A,B  - Sets bits in register A according to A XOR B
- 7. JMP A    - Jumps to instruction at offset I+A (A signed)
- 8. JZR A    - Jumps to instruction at offset I+A (A signed) if register R is zero
+ 7. JMP A    - Jumps to instruction at offset I+A (A signed) or Symbol A
+ 8. JZR A    - Jumps to instruction at offset I+A (A signed) or Symbol A if register R is zero
  9. MOV A,B  - Moves 64-bit value from B to A
 10. DREF A,B - Moves 64-bit value from address specified by B to A
-11. LADR A,B - Loads register A with address of register B
+11. LADR A,B - Loads register A with address of B
 12. COMP A,B - Loads register A with the bitwise complement of the value of register B
-13. PUSH A   - Pushes A onto the stack
-14. POP A    - Pops off of the stack into A
+13. PUSH A   - Pushes value/register A onto the stack
+14. POP A    - Pops off of the stack into register A
 15. RET      - Signifies end of execution
+
+Additional code features:
+    DATA A   - Emplaces a value as data
+    SYMBOL:  - Defines a symbol at this point
+    @SYMBOL  - References a symbol as an operand
 
 
 Instruction Memory Layout:

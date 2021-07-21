@@ -16,20 +16,29 @@
 #define SYMBOL_NAME_SIZE 32
 #define STR_BUF_SIZE 128
 #define SPACE ' '
+#define SYM_PREFIX '@' // prefix for referencing a token
 #define SYM_SUFFIX ':' // suffix for a label/symbol token
 #define BYTE unsigned char
-#define NUM_COMMANDS 16
+#define NUM_INSTRUCTIONS 16
 #define NUM_REGISTERS 13
 #define I8_MAX 127
 #define I8_MIN -128
+#define DATA "DATA" // data emplacement command
+
+typedef struct
+{
+    U64 offset; // code location of empty reference (always 64-bit)
+    int is_jump; // indicates that a signed relative offset should be emplaced
+} SYMBOL_REFERENCE;
 
 typedef struct
 {
     U64 offset;
-    U64 reference_offsets[MAX_SYMBOL_REFERENCES];
+    SYMBOL_REFERENCE references[MAX_SYMBOL_REFERENCES];
     size_t reference_count;
     int is_defined;
     size_t line_defined;
+    size_t line_first_referenced;
     char name[SYMBOL_NAME_SIZE];
 } SYMBOL;
 
@@ -58,7 +67,7 @@ const char* OP_TYPES[OP_TYPE_SIZE] =
     "Invalid"
 };
 
-const char* COMMANDS[NUM_COMMANDS] = {
+const char* INSTRUCTIONS[NUM_INSTRUCTIONS] = {
     "ADD",
     "SUB",
     "MUL",
@@ -149,62 +158,6 @@ void write_code_i64(I64 i64)
     code_size += sizeof(I64);
 }
 
-// op must be one of the specified types (not none or invalid)
-// returns 0 on success, -1 on invalid operand, -2 on too many symbols
-int write_operand(OP_TYPE op, const char* token)
-{
-    if (token == NULL)
-        return -1;
-
-    switch (op)
-    {
-    case OP_SMALL_VAL_U:
-        write_code_u8((U8)strtoul(token, NULL, 0));
-        return 0;
-    case OP_SMALL_VAL_S:
-        write_code_i8((I8)strtol(token, NULL, 0));
-        return 0;
-    case OP_LARGE_VAL_U:
-        write_code_u64(strtoull(token, NULL, 0));
-        return 0;
-    case OP_LARGE_VAL_S:
-        write_code_i64(strtoll(token, NULL, 0));
-        return 0;
-    case OP_SYMBOL:
-        write_code_i64(0);
-        token++;
-
-        // add symbol reference
-        SYMBOL* sym = get_symbol(token);
-
-        if (sym)
-        {
-            sym->reference_offsets[sym->reference_count] = code_size;
-            sym->reference_count++;
-        }
-        else
-        {
-            if (num_symbols >= (MAX_SYMBOLS - 1))
-                return -2;
-
-            sym = &(symbols[num_symbols]);
-            strcpy_s(sym->name, SYMBOL_NAME_SIZE, token);
-            sym->line_defined = 0;
-            sym->offset = 0;
-            sym->is_defined = 0;
-            sym->reference_offsets[sym->reference_count]
-                = code_size;
-            sym->reference_count++;
-
-            num_symbols++;
-        }
-
-        return 0;
-    }
-
-    return -1;
-}
-
 // implementation of POSIX C getline for Windows
 // credit: Will Hartung on Stack Overflow
 size_t getline(char** lineptr, size_t* n, FILE* stream)
@@ -278,9 +231,9 @@ U8 get_command(const char* token)
     if (token == NULL)
         return U8_MAX;
 
-    for (U8 s = 0; s < NUM_COMMANDS; s++)
+    for (U8 s = 0; s < NUM_INSTRUCTIONS; s++)
     {
-        if (!strcmp(COMMANDS[s], token))
+        if (!strcmp(INSTRUCTIONS[s], token))
             return s;
     }
 
@@ -301,6 +254,96 @@ U8 get_register(const char* token)
     }
 
     return U8_MAX;
+}
+
+void write_instruction(INSTRUCTION base, OP_TYPE op_a, OP_TYPE op_b)
+{
+    U8 ins = base;
+
+    if (op_a == OP_SMALL_VAL_U || op_a == OP_SMALL_VAL_S ||
+        op_b == OP_SMALL_VAL_U || op_b == OP_SMALL_VAL_S)
+    {
+        ins |= SMALL_FLAG;
+    }
+
+    if (op_a != OP_REGISTER && op_a != OP_NONE)
+    {
+        ins |= VALA_FLAG;
+    }
+
+    if (op_b != OP_REGISTER && op_b != OP_NONE)
+    {
+        ins |= VALB_FLAG;
+    }
+
+    write_code_u8(ins);
+}
+
+// op must be one of the specified types (not none or invalid)
+// returns 0 on success, -1 on invalid operand, -2 on too many symbols
+int write_operand(INSTRUCTION ins, OP_TYPE op, const char* token)
+{
+    if (token == NULL)
+        return -1;
+
+    switch (op)
+    {
+    case OP_REGISTER:
+        write_code_u8(get_register(token));
+        return 0;
+    case OP_SMALL_VAL_U:
+        write_code_u8((U8)strtoul(token, NULL, 0));
+        return 0;
+    case OP_SMALL_VAL_S:
+        write_code_i8((I8)strtol(token, NULL, 0));
+        return 0;
+    case OP_LARGE_VAL_U:
+        write_code_u64(strtoull(token, NULL, 0));
+        return 0;
+    case OP_LARGE_VAL_S:
+        write_code_i64(strtoll(token, NULL, 0));
+        return 0;
+    case OP_SYMBOL:
+        write_code_i64(0);
+        token++;
+
+        // add symbol reference
+        SYMBOL* sym = get_symbol(token);
+
+        if (sym)
+        {
+            sym->references[sym->reference_count].offset = code_size;
+
+            if (ins == JMP || ins == JZR)
+                sym->references[sym->reference_count].is_jump = 1;
+
+            sym->reference_count++;
+        }
+        else
+        {
+            if (num_symbols >= (MAX_SYMBOLS - 1))
+                return -2;
+
+            sym = &(symbols[num_symbols]);
+            strcpy_s(sym->name, SYMBOL_NAME_SIZE, token);
+            sym->line_defined = 0;
+            sym->offset = 0;
+            sym->is_defined = 0;
+            sym->references[sym->reference_count].offset
+                = code_size;
+
+            if (ins == JMP || ins == JZR)
+                sym->references[sym->reference_count].is_jump = 1;
+
+            sym->reference_count++;
+
+            num_symbols++;
+        }
+
+        return 0;
+    }
+
+    return -1;
 }
 
 // trims delimiters from string tokens
@@ -489,20 +532,23 @@ OP_TYPE operand_type(const char* operand)
     if (operand == NULL)
         return OP_INVALID;
 
-    if (operand[0] == '@')
+    if (operand[0] == SYM_PREFIX)
         return OP_SYMBOL;
 
     if (get_register(operand) != U8_MAX)
         return OP_REGISTER;
 
-    if (operand[0] == '0' && operand[1] == 'x')
+    if (operand[0] == '0')
     {
-        U64 ull = strtoull(operand, NULL, 0);
+        if (strlen(operand) > 2 && operand[1] == 'x' && isxdigit(operand[2]))
+        {
+            U64 ull = strtoull(operand, NULL, 0);
 
-        if (ull > U8_MAX)
-            return OP_LARGE_VAL_U;
-        else
-            return OP_SMALL_VAL_U;
+                if (ull > U8_MAX)
+                    return OP_LARGE_VAL_U;
+                else
+                    return OP_SMALL_VAL_U;
+        }
     }
 
     if (operand[0] == '-')
@@ -562,8 +608,31 @@ int parse_line(char** tokens, size_t num_tokens, const char* input_filename,
     // force uppercase
     to_upper(tokens[0], len);
 
+    // check if token deines data
+    if (!strcmp(tokens[0], DATA))
+    {
+        if (num_tokens != 2)
+        {
+            printf("Error: Too many tokens for %s, expecting a single value\n",
+                tokens[0]);
+            print_file_line(input_filename, line_num);
+            return -7;
+        }
+
+        OP_TYPE op_type = operand_type(tokens[1]);
+
+        if (op_type == OP_NONE || op_type == OP_INVALID || op_type == OP_SYMBOL)
+        {
+            printf("Error: Invalid operand type for %s (%s)\n",
+                tokens[0], OP_TYPES[op_type]);
+            print_file_line(input_filename, line_num);
+            return -7;
+        }
+
+        write_operand(0, op_type, tokens[1]);
+    }
     // check if token defines a symbol (label)
-    if (tokens[0][len - 1] == SYM_SUFFIX)
+    else if (tokens[0][len - 1] == SYM_SUFFIX)
     {
         // null-terminate symbol name, removing suffix
         tokens[0][len - 1] = 0;
@@ -698,10 +767,10 @@ int parse_line(char** tokens, size_t num_tokens, const char* input_filename,
                 return -6;
             }
 
-            write_code_u8(command);
+            write_instruction(command, op_a_type, op_b_type);
 
-            if (write_operand(op_a_type, tokens[1]) ||
-                write_operand(op_b_type, tokens[2]))
+            if (write_operand(command, op_a_type, tokens[1]) ||
+                write_operand(command, op_b_type, tokens[2]))
             {
                 printf("Error: Invalid operands for %s (generic)\n", tokens[0]);
                 print_file_line(input_filename, line_num);
@@ -713,29 +782,120 @@ int parse_line(char** tokens, size_t num_tokens, const char* input_filename,
         // class: jump commands with op A register, symbol or value
         case JMP:
         case JZR:
-            
+            write_instruction(command, op_a_type, op_b_type);
+
+            if (write_operand(command, op_a_type, tokens[1]))
+            {
+                printf("Error: Invalid operand/s for %s (generic)\n", tokens[0]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
             return 0;
 
+        // dref/ladr take register as A, and either register or LARGE VALUE(!) as B
         case DREF:
-            
-            return 0;
-
         case LADR:
+            if (op_a_type != OP_REGISTER)
+            {
+                printf("Error: %s expects Register as operand A, not %s\n",
+                    tokens[0], OP_TYPES[op_a_type]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
+
+            if (op_b_type == OP_SYMBOL || op_b_type == OP_SMALL_VAL_S 
+                || op_b_type == OP_SMALL_VAL_U)
+            {
+                printf("Error: Symbol operand for %s is invalid\n", tokens[0]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
+
+            write_instruction(command, op_a_type, op_b_type);
+
+            if (write_operand(command, op_a_type, tokens[1]) ||
+                write_operand(command, op_b_type, tokens[2]))
+            {
+                printf("Error: Invalid operands for %s (generic)\n", tokens[0]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
             
             return 0;
 
+        // comp will only take 2 registers
         case COMP:
-            
+            if (op_a_type != OP_REGISTER)
+            {
+                printf("Error: %s expects Register as operand A, not %s\n",
+                    tokens[0], OP_TYPES[op_a_type]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
+
+            if (op_b_type != OP_REGISTER)
+            {
+                printf("Error: %s expects Register as operand B, not %s\n",
+                    tokens[0], OP_TYPES[op_b_type]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
+
+            write_instruction(command, op_a_type, op_b_type);
+
+            if (write_operand(command, op_a_type, tokens[1]) ||
+                write_operand(command, op_b_type, tokens[2]))
+            {
+                printf("Error: Invalid operands for %s (generic)\n", tokens[0]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
+
             return 0;
 
+        // push will take a register or value as A
         case PUSH:
-            
+            if (op_a_type == OP_SYMBOL)
+            {
+                printf("Error: %s expects Register or Value as operand A, not %s\n",
+                    tokens[0], OP_TYPES[op_a_type]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
+
+            write_instruction(command, op_a_type, op_b_type);
+
+            if (write_operand(command, op_a_type, tokens[1]))
+            {
+                printf("Error: Invalid operands for %s (generic)\n", tokens[0]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
+
             return 0;
 
+        // pop will only take a single register
         case POP:
-            
+            if (op_a_type != OP_REGISTER)
+            {
+                printf("Error: %s expects Register as operand A, not %s\n",
+                    tokens[0], OP_TYPES[op_a_type]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
+
+            write_instruction(command, op_a_type, op_b_type);
+
+            if (write_operand(command, op_a_type, tokens[1]))
+            {
+                printf("Error: Invalid operands for %s (generic)\n", tokens[0]);
+                print_file_line(input_filename, line_num);
+                return -6;
+            }
+
             return 0;
 
+        // ret has no args
         case RET:
             write_code_u8((U8)RET);
             return 0;
@@ -750,10 +910,43 @@ int parse_line(char** tokens, size_t num_tokens, const char* input_filename,
     return 0;
 }
 
-// todo
-void resolve_symbols()
+int resolve_symbols(const char* input_filename)
 {
-    //
+    for (size_t s = 0; s < num_symbols && s < MAX_SYMBOLS; s++)
+    {
+        if (!symbols[s].is_defined)
+        {
+            printf("Error: Unresolved symbol %s\n", symbols[s].name);
+            return -1;
+        }
+
+        if (symbols[s].reference_count == 0)
+        {
+            printf("Warning: Unreferenced symbol %s\n", symbols[s].name);
+            print_file_line(input_filename, symbols[s].line_defined);
+        }
+
+        for (size_t t = 0; t < symbols[s].reference_count
+            && t < MAX_SYMBOL_REFERENCES; t++)
+        {
+            if (symbols[s].references[t].is_jump)
+            {
+                // get relative offset of symbol location
+                I64 offset = (I64)symbols[s].offset - 
+                    (I64)symbols[s].references[t].offset;
+
+                *(I64*)(&(code[symbols[s].references[t].offset])) = offset;
+            }
+            else
+            {
+                // copy U64 from symbol location to reference location
+                *(U64*)(&(code[symbols[s].references[t].offset])) =
+                    *(U64*)(&(code[symbols[s].offset]));
+            }
+        }
+    }
+
+    return 0;
 }
 
 void assemble(FILE* input, FILE* output, const char* input_filename)
@@ -769,6 +962,9 @@ void assemble(FILE* input, FILE* output, const char* input_filename)
         symbols[s].reference_count = 0;
         symbols[s].line_defined = 0;
         symbols[s].is_defined = 0;
+
+        for (size_t t = 0; t < MAX_SYMBOL_REFERENCES; t++)
+            symbols[s].references[t].is_jump = 0;
     }
 
     linesize = getline(&line, &n, input);
@@ -867,14 +1063,8 @@ void assemble(FILE* input, FILE* output, const char* input_filename)
         }
     }
 
-    for (size_t s = 0; s < num_symbols; s++)
-    {
-        if (symbols[s].reference_count == 0)
-        {
-            printf("Warning: Unreferenced symbol %s\n", symbols[s].name);
-            print_file_line(input_filename, symbols[s].line_defined);
-        }
-    }
+    if (resolve_symbols(input_filename))
+        goto CLEANUP;
 
     printf("\nAssembly complete, writing binary...\n");
 
