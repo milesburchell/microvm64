@@ -1,11 +1,30 @@
-#include "vm.h"
 #include <stdlib.h>
 #include <malloc.h>
 #include <assert.h>
+#include "vm.h"
 
 #ifdef _DEBUG
 #include <stdio.h> // debug output
 #endif
+
+const char* INSTRUCTIONS[NUM_INSTRUCTIONS] = {
+	"ADD",
+	"SUB",
+	"MUL",
+	"DIV",
+	"AND",
+	"OR",
+	"XOR",
+	"JMP",
+	"JZR",
+	"MOV",
+	"DREF",
+	"LADR",
+	"COMP",
+	"PUSH",
+	"POP",
+	"RET"
+};
 
 // global variables for exec_instruction
 U8 ins;
@@ -15,6 +34,45 @@ INT64* OP_B;
 INT64 OP_B_LOCAL;
 U8 OPA_SIZE;
 U8 OPB_SIZE;
+
+// gets number of operands for a command
+size_t operand_count(U8 command)
+{
+	size_t needed;
+
+	switch (command)
+	{
+	case ADD:
+	case SUB:
+	case MUL:
+	case DIV:
+	case AND:
+	case OR:
+	case XOR:
+	case MOV:
+	case DREF:
+	case LADR:
+	case COMP:
+		needed = 2;
+		break;
+
+	case JMP:
+	case JZR:
+	case PUSH:
+	case POP:
+		needed = 1;
+		break;
+
+	case RET:
+		needed = 0;
+		break;
+
+	default:
+		return 0;
+	}
+
+	return needed;
+}
 
 __inline INT64* get_register(const INT8 code, MVM64_REGISTERS* context)
 {
@@ -29,6 +87,7 @@ __inline U64 exec_instruction(MVM64_REGISTERS* context)
 {
 	U64 bytes_executed;
 	ins = *(U8*)(context->s.I.u);
+	OPA_SIZE = 0, OPB_SIZE = 0;
 
 #ifdef _DEBUG
 	printf("exec_instruction: starting from 0x%llx\n", context->s.I.u);
@@ -42,6 +101,12 @@ __inline U64 exec_instruction(MVM64_REGISTERS* context)
 
 		return U64_MAX;
 	}
+
+	size_t num_ops = operand_count(INSTRUCTION_BASE(ins));
+
+#ifdef _DEBUG
+	printf("Instruction %s, %llu operands\n", INSTRUCTIONS[INSTRUCTION_BASE(ins)], num_ops);
+#endif
 
 	if (INSTRUCTION_VALA(ins))
 	{
@@ -70,7 +135,7 @@ __inline U64 exec_instruction(MVM64_REGISTERS* context)
 #endif
 		}
 	}
-	else
+	else if (num_ops > 0)
 	{
 #ifdef _DEBUG
 		printf(" - Operand A: Register %u\n", *(U8*)((context->s.I.u) + sizeof(ins)));
@@ -92,24 +157,24 @@ __inline U64 exec_instruction(MVM64_REGISTERS* context)
 			OP_B_LOCAL.u = *(U8*)(context->s.I.u + sizeof(ins) + OPA_SIZE);
 			OP_B = &OP_B_LOCAL;
 
-			bytes_executed = OPA_SIZE + sizeof(INT8) + sizeof(ins);
-
 #ifdef _DEBUG
 			printf(" - Operand B: 0x%llx (8-bit)\n", OP_B->u);
 #endif
+
+			OPB_SIZE = sizeof(U8);
 		}
 		else
 		{
 			OP_B = (INT64*)(context->s.I.u + sizeof(ins) + OPA_SIZE);
 
-			bytes_executed = OPA_SIZE + sizeof(INT64) + sizeof(ins);
-
 #ifdef _DEBUG
 			printf(" - Operand B: 0x%llx (64-bit)\n", OP_B->u);
 #endif
+
+			OPB_SIZE = sizeof(U64);
 		}
 	}
-	else
+	else if (num_ops > 1)
 	{
 #ifdef _DEBUG
 		printf(" - Operand B: Register %u\n", *(U8*)(context->s.I.u + sizeof(ins) + OPA_SIZE));
@@ -117,8 +182,10 @@ __inline U64 exec_instruction(MVM64_REGISTERS* context)
 
 		OP_B = get_register(*(INT8*)(context->s.I.u + sizeof(ins) + OPA_SIZE), context);
 
-		bytes_executed = OPA_SIZE + sizeof(INT8) + sizeof(ins);
+		OPB_SIZE = sizeof(U8);
 	}
+
+	bytes_executed = sizeof(ins) + OPA_SIZE + OPB_SIZE;
 
 #ifdef _DEBUG
 	printf(" - Instruction: %u\n", INSTRUCTION_BASE(ins));
@@ -159,13 +226,13 @@ __inline U64 exec_instruction(MVM64_REGISTERS* context)
 		break;
 
 	case JMP:
-		context->s.I = *OP_A;
+		context->s.I.u += OP_A->i;
 		return bytes_executed;
 
 	case JZR:
 		if (!context->s.R.u)
 		{
-			context->s.I = *OP_A;
+			context->s.I.u += OP_A->i;
 			return bytes_executed;
 		}
 		break;

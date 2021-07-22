@@ -69,7 +69,8 @@ typedef enum
 	COMP,
 	PUSH,
 	POP,
-	RET
+	RET,
+	NUM_INSTRUCTIONS
 } INSTRUCTION;
 
 #define VALA_FLAG (1<<5)
@@ -82,6 +83,8 @@ typedef enum
 #define INSTRUCTION_VALA(i) i&(1<<5)
 #define INSTRUCTION_VALB(i) i&(1<<6)
 #define INSTRUCTION_SMALL(i) i&(1<<7)
+
+size_t operand_count(U8 command);
 
 MVM64_REGISTERS* create_context();
 

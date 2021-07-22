@@ -6,6 +6,37 @@
 #include <climits>
 #include "vm.h"
 #include "assembler.h"
+#pragma comment(lib,"mvm64.lib")
+
+const extern char* INSTRUCTIONS[NUM_INSTRUCTIONS]; // mvm64.lib
+
+const char* OP_TYPES[OP_TYPE_SIZE] =
+{
+    "None",
+    "Register",
+    "Unsigned 8-bit Integer",
+    "Signed 8-bit Integer",
+    "Unsigned 64-bit Integer",
+    "Signed 64-bit Integer",
+    "Symbol",
+    "Invalid"
+};
+
+const char* REGISTERS[NUM_REGISTERS] = {
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "R",
+    "S",
+    "Z",
+    "I",
+    "L"
+};
 
 char* lines[MAX_LINES] = { 0 };
 size_t num_lines = 0;
@@ -147,7 +178,7 @@ U8 get_command(const char* token)
 
 // gets the code for a register by name, or returns U8_MAX if it is invalid
 // note: token must be uppercase
-U8 get_register(const char* token)
+U8 get_register_by_token(const char* token)
 {
     if (token == NULL)
         return U8_MAX;
@@ -194,7 +225,7 @@ int write_operand(INSTRUCTION ins, OP_TYPE op, const char* token)
     switch (op)
     {
     case OP_REGISTER:
-        write_code_u8(get_register(token));
+        write_code_u8(get_register_by_token(token));
         return 0;
     case OP_SMALL_VAL_U:
         write_code_u8((U8)strtoul(token, NULL, 0));
@@ -390,44 +421,7 @@ void to_upper(char* string)
     }
 }
 
-// gets number of operands for a command, or return U64_MAX if command is invalid
-size_t operand_count(U8 command)
-{
-    size_t needed;
 
-    switch (command)
-    {
-    case ADD:
-    case SUB:
-    case MUL:
-    case DIV:
-    case AND:
-    case OR:
-    case XOR:
-    case MOV:
-    case DREF:
-    case LADR:
-    case COMP:
-        needed = 2;
-        break;
-
-    case JMP:
-    case JZR:
-    case PUSH:
-    case POP:
-        needed = 1;
-        break;
-
-    case RET:
-        needed = 0;
-        break;
-
-    default:
-        return U64_MAX;
-    }
-
-    return needed;
-}
 
 // gets the type of an operand token
 // OP_REGISTER for a register
@@ -445,7 +439,7 @@ OP_TYPE operand_type(const char* operand)
     if (operand[0] == SYM_PREFIX)
         return OP_SYMBOL;
 
-    if (get_register(operand) != U8_MAX)
+    if (get_register_by_token(operand) != U8_MAX)
         return OP_REGISTER;
 
     if (operand[0] == '0')

@@ -1,7 +1,7 @@
 #pragma once
 
 #define VER_MAJ 0
-#define VER_MIN "01b"
+#define VER_MIN "01c"
 #define MAX_TOKENS_LINE 5 // meximum number of tokens in a single line
 #define MAX_LINES 4096 // maximum lines of code
 #define MAX_BYTES MAX_LINES // maximum bytes of binary output (most is 1 byte per line for now)
@@ -13,7 +13,6 @@
 #define SYM_PREFIX '@' // prefix for referencing a token
 #define SYM_SUFFIX ':' // suffix for a label/symbol token
 #define BYTE unsigned char
-#define NUM_INSTRUCTIONS 16
 #define NUM_REGISTERS 13
 #define I8_MAX 127
 #define I8_MIN -128
@@ -49,50 +48,3 @@ typedef enum
     OP_INVALID,
     OP_TYPE_SIZE
 } OP_TYPE;
-
-const char* OP_TYPES[OP_TYPE_SIZE] =
-{
-    "None",
-    "Register",
-    "Unsigned 8-bit Integer",
-    "Signed 8-bit Integer",
-    "Unsigned 64-bit Integer",
-    "Signed 64-bit Integer",
-    "Symbol",
-    "Invalid"
-};
-
-const char* INSTRUCTIONS[NUM_INSTRUCTIONS] = {
-    "ADD",
-    "SUB",
-    "MUL",
-    "DIV",
-    "AND",
-    "OR",
-    "XOR",
-    "JMP",
-    "JZR",
-    "MOV",
-    "DREF",
-    "LADR",
-    "COMP",
-    "PUSH",
-    "POP",
-    "RET"
-};
-
-const char* REGISTERS[NUM_REGISTERS] = {
-    "A",
-    "B",
-    "C",
-    "D",
-    "E",
-    "F",
-    "G",
-    "H",
-    "R",
-    "S",
-    "Z",
-    "I",
-    "L"
-};

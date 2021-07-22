@@ -25,8 +25,16 @@ U8 testcode[] = {
 
 U8 buffer[1024];
 
-int main()
+int main(int argc, char* argv[])
 {
+    if (argc < 2)
+    {
+        printf("Tester: No arg");
+        return -1;
+    }
+
+    char* binary = argv[1];
+
     MVM64_REGISTERS* context = create_context();
 
     assert(context);
@@ -39,11 +47,11 @@ int main()
     free_context(context);
 
     FILE* bin;
-    fopen_s(&bin, "fib.bin", "r");
+    fopen_s(&bin, binary, "r");
 
     if (!bin)
     {
-        printf("Couldn't open fib.bin.");
+        printf("Couldn't open %s.", binary);
         return -1;
     }
 
@@ -51,11 +59,11 @@ int main()
 
     if (!read)
     {
-        printf("Couldn't read data from test.bin.");
+        printf("Couldn't read data from %s.", binary);
         return -1;
     }
 
-    printf("Read %llu bytes from test.bin\n", read);
+    printf("Read %llu bytes from %s\n", read, binary);
 
     fclose(bin);
 
