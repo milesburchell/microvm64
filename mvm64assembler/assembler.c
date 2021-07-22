@@ -847,16 +847,16 @@ int resolve_symbols(const char* input_filename)
         {
             if (symbols[s].references[t].is_jump)
             {
-                // get relative offset of symbol location
+                // get relative offset of symbol location + size of jump instruction
                 I64 offset = (I64)symbols[s].offset - 
-                    (I64)symbols[s].references[t].offset;
+                    (I64)symbols[s].references[t].offset + sizeof(I64) + sizeof(U8);
 
-                *(I64*)(code + symbols[s].references[t].offset) = offset;
+                *(I64*)(code + symbols[s].references[t].offset - sizeof(I64)) = offset;
             }
             else
             {
                 // copy U64 from symbol location to reference location
-                *(U64*)(code + symbols[s].references[t].offset) =
+                *(U64*)(code + symbols[s].references[t].offset - sizeof(U64)) =
                     *(U64*)(code + symbols[s].offset);
             }
         }

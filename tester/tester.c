@@ -39,11 +39,11 @@ int main()
     free_context(context);
 
     FILE* bin;
-    fopen_s(&bin, "test.bin", "r");
+    fopen_s(&bin, "fib.bin", "r");
 
     if (!bin)
     {
-        printf("Couldn't open test.bin.");
+        printf("Couldn't open fib.bin.");
         return -1;
     }
 
@@ -62,6 +62,10 @@ int main()
     context = create_context();
 
     assert(context);
+
+    INT64 twenty;
+    twenty.u = 20;
+    push(twenty, context);
 
     code_executed = execute(buffer, context, &retnval);
 

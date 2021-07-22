@@ -259,3 +259,12 @@ void free_context(MVM64_REGISTERS* context)
 	free((void*)context->s.Z.u);
 	free(context);
 }
+
+void push(INT64 value, MVM64_REGISTERS* context)
+{
+	if (context == NULL)
+		return;
+
+	context->s.S.u += sizeof(INT64);
+	*(INT64*)context->s.S.u = value;
+}
