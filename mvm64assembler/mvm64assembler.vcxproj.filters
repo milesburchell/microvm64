@@ -15,7 +15,12 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="mvm64assembler.c">
+    <ClInclude Include="assembler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="assembler.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

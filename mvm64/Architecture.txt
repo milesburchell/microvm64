@@ -50,3 +50,6 @@ Instruction/Flag Bits:
  5:   Operand A (0 - register, 1 - value)
  6:   Operand B (0 - register, 1 - value)
  7:   Small Value Operands (1 - non-register value/s are 8-bit not 64-bit - invalid for DREF/LADR)
+
+ Todo list:
+ - Let assembler use small operands for symbol jumps where appropriate

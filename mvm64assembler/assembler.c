@@ -5,102 +5,7 @@
 #include <string.h>
 #include <climits>
 #include "vm.h"
-
-#define VER_MAJ 0
-#define VER_MIN "01a"
-#define MAX_TOKENS_LINE 5 // meximum number of tokens in a single line
-#define MAX_LINES 4096 // maximum lines of code
-#define MAX_BYTES MAX_LINES // maximum bytes of binary output (most is 1 byte per line for now)
-#define MAX_SYMBOLS 128 // maximum number of defined symbols
-#define MAX_SYMBOL_REFERENCES 32 // maximum number of times a symbol may be referred to
-#define SYMBOL_NAME_SIZE 32
-#define STR_BUF_SIZE 128
-#define SPACE ' '
-#define SYM_PREFIX '@' // prefix for referencing a token
-#define SYM_SUFFIX ':' // suffix for a label/symbol token
-#define BYTE unsigned char
-#define NUM_INSTRUCTIONS 16
-#define NUM_REGISTERS 13
-#define I8_MAX 127
-#define I8_MIN -128
-#define DATA "DATA" // data emplacement command
-
-typedef struct
-{
-    U64 offset; // code location of empty reference (always 64-bit)
-    int is_jump; // indicates that a signed relative offset should be emplaced
-} SYMBOL_REFERENCE;
-
-typedef struct
-{
-    U64 offset;
-    SYMBOL_REFERENCE references[MAX_SYMBOL_REFERENCES];
-    size_t reference_count;
-    int is_defined;
-    size_t line_defined;
-    size_t line_first_referenced;
-    char name[SYMBOL_NAME_SIZE];
-} SYMBOL;
-
-typedef enum
-{
-    OP_NONE = 0,
-    OP_REGISTER,
-    OP_SMALL_VAL_U,
-    OP_SMALL_VAL_S,
-    OP_LARGE_VAL_U,
-    OP_LARGE_VAL_S,
-    OP_SYMBOL,
-    OP_INVALID,
-    OP_TYPE_SIZE
-} OP_TYPE;
-
-const char* OP_TYPES[OP_TYPE_SIZE] =
-{
-    "None",
-    "Register",
-    "Unsigned 8-bit Integer",
-    "Signed 8-bit Integer",
-    "Unsigned 64-bit Integer",
-    "Signed 64-bit Integer",
-    "Symbol",
-    "Invalid"
-};
-
-const char* INSTRUCTIONS[NUM_INSTRUCTIONS] = {
-    "ADD",
-    "SUB",
-    "MUL",
-    "DIV",
-    "AND",
-    "OR",
-    "XOR",
-    "JMP",
-    "JZR",
-    "MOV",
-    "DREF",
-    "LADR",
-    "COMP",
-    "PUSH",
-    "POP",
-    "RET"
-};
-
-const char* REGISTERS[NUM_REGISTERS] = {
-    "A",
-    "B",
-    "C",
-    "D",
-    "E",
-    "F",
-    "G",
-    "H",
-    "R",
-    "S",
-    "Z",
-    "I",
-    "L"
-};
+#include "assembler.h"
 
 char* lines[MAX_LINES] = { 0 };
 size_t num_lines = 0;
@@ -196,7 +101,7 @@ size_t getline(char** lineptr, size_t* n, FILE* stream)
 
     while (c != EOF)
     {
-        if ((p - bufptr) > (size - 1))
+        if ((size_t)(p - bufptr) > (size - 1))
         {
             size = size + STR_BUF_SIZE;
             bufptr = realloc(bufptr, size);
@@ -394,6 +299,9 @@ char* trim_line(char* string)
 
     size_t len = strlen(string);
 
+    if (len == 0) // line was all whitespace
+        return NULL;
+
     // copy string to new buffer
     char* newstring = calloc(len + 1, sizeof(char));
 
@@ -465,11 +373,13 @@ char* trim_line(char* string)
     return newstring;
 }
 
-// changes all lowercase letters in a string to uppercase
-void to_upper(char* string, size_t len)
+// changes all lowercase letters in a string to uppercase (overwrites)
+void to_upper(char* string)
 {
     if (string == NULL)
         return;
+
+    size_t len = strlen(string);
 
     for (size_t s = 0; s < len; s++)
     {
@@ -603,12 +513,13 @@ int parse_line(char** tokens, size_t num_tokens, const char* input_filename,
     if (tokens[0] == NULL)
         return -1;
 
+    // force uppercase
+    for (size_t s = 0; s < num_tokens; s++)
+        to_upper(tokens[s]);
+
     size_t len = strlen(tokens[0]);
 
-    // force uppercase
-    to_upper(tokens[0], len);
-
-    // check if token deines data
+    // check if token defines data
     if (!strcmp(tokens[0], DATA))
     {
         if (num_tokens != 2)
@@ -632,7 +543,7 @@ int parse_line(char** tokens, size_t num_tokens, const char* input_filename,
         write_operand(0, op_type, tokens[1]);
     }
     // check if token defines a symbol (label)
-    else if (tokens[0][len - 1] == SYM_SUFFIX)
+    else if (len > 1 && tokens[0][len - 1] == SYM_SUFFIX)
     {
         // null-terminate symbol name, removing suffix
         tokens[0][len - 1] = 0;
@@ -651,9 +562,14 @@ int parse_line(char** tokens, size_t num_tokens, const char* input_filename,
             }
             else
             {
+#ifdef _DEBUG
+                printf("    DEBUG: Defining already referenced symbol %s at code offset %llu\n", 
+                    tokens[0], code_size);
+#endif
                 // define symbol
-                symbols[num_symbols].line_defined = line_num;
-                symbols[num_symbols].offset = code_size;
+                sym->line_defined = line_num;
+                sym->offset = code_size;
+                sym->is_defined = 1;
             }
         }
         else // create symbol
@@ -935,13 +851,13 @@ int resolve_symbols(const char* input_filename)
                 I64 offset = (I64)symbols[s].offset - 
                     (I64)symbols[s].references[t].offset;
 
-                *(I64*)(&(code[symbols[s].references[t].offset])) = offset;
+                *(I64*)(code + symbols[s].references[t].offset) = offset;
             }
             else
             {
                 // copy U64 from symbol location to reference location
-                *(U64*)(&(code[symbols[s].references[t].offset])) =
-                    *(U64*)(&(code[symbols[s].offset]));
+                *(U64*)(code + symbols[s].references[t].offset) =
+                    *(U64*)(code + symbols[s].offset);
             }
         }
     }
